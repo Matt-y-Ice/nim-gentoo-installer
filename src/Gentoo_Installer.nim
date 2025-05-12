@@ -300,6 +300,33 @@ proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
 
   stdout.styledWriteLine(fgGreen, "Successfully prepared for chroot.")
 
+proc gentoo_chroot(
+  hostname: string, 
+  username: string,
+  desktop: string,
+  usergroups: seq[string],
+  allPkgs: seq[string], 
+  artScript:string,
+  mountPt: string
+  ) =
+  ## Executes a chroot and runs the Arturo post-setup script with passed arguments.
+  ##
+  ## :Parameters:
+  ##   - `hostname`: Hostname to set inside the chroot
+  ##   - `username`: User account to create
+  ##   - `desktop`: Desktop environment key (e.g., "gnome")
+  ##   - `usergroups`: Additional groups for the user (wheel, audio, etc.)
+  ##   - `allPkgs`: List of packages to install in chroot
+  ##   - `artScript`: Path to the Arturo script inside the chroot (e.g., /root/gentoo-chroot.art)
+  ##   - `mountPt`: Root mount point for the chroot (e.g., /mnt/gentoo)
+  let args: string = hostname & " " & username & " " & desktop & " " & usergroups.join(" ") & " " & allPkgs.join(" ")
+  let fullCmd: string = "chroot " & mountPt & " /bin/bash -c '" & artScript & " " & args & "'"
+  stdout.styledWriteLine(fgCyan, "Running chroot command: " & fullCmd)
+  let err = execCmd(fullCmd)
+  if err != 0:
+    stdout.styledWriteLine(fgRed, "Error: Failed to execute chroot!")
+    quit(1)
+
 when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
@@ -333,5 +360,9 @@ when isMainModule:
   dl_stage3(stage3Addy, mountPoint)
   install_stage3(mountPoint)
 
+  #TODO: add path to TOML and parser
   let makeConfig: string = "../gentoo-files/make.conf"
   prepare_chroot(root, mountPoint, makeConfig)
+
+  let artScript: string = "./"
+  gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
