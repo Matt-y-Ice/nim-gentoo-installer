@@ -1,7 +1,7 @@
 # Compiled binaries
 src/Gentoo_Installer
-src/*
 !src/*.nim
+!src/*.toml
 
 # Build artifacts
 nimcache/

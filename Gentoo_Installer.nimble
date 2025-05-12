@@ -11,3 +11,4 @@ bin           = @["Gentoo_Installer"]
 # Dependencies
 
 requires "nim >= 2.2.0"
+requires "parsetoml >= 0.7.2"

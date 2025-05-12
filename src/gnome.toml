@@ -1,0 +1,28 @@
+# Target disk to partition and format
+disk = "/dev/sdc"
+
+# Hostname for the system
+hostname = "gentoo-desktop"
+
+# User account to create
+username = "mattyice"
+usergroups = ["wheel", "audio", "video"]
+
+desktop = "gnome"
+
+[packages]
+# Base system programs
+system = ["sys-kernel/installkernel", "sys-kernel/gentoo-kernel", "sys-kernel/gentoo-sources", "sys-apps/systemd", "sys-kernel/linux-firmware"]
+
+audio = ["media-video/pipewire", "media-video/wireplumber", "media-libs/libcanberra"]
+
+# System tools and utilities
+sys_tools = ["sys-apps/mlocate", "app-shells/bash-completion", "net-misc/chrony", "sys-fs/btrfs-progs", "sys-fs/dosfstools", "app-portage/cpuid2cpuflags", "genfstab", "net-misc/dhcpcd", "net-misc/networkmanager", "app-admin/sudo"]
+
+# Gnome DE and gnome-specific apps
+gnome = ["gnome-base/gnome", "gnome-tweaks", "gdm", "app-arch/file-roller", "gnome-base/dconf-editor", "gnome-extra/gnome-calculator", "gnome-extra/gnome-system-monitor", "sys-apps/gnome-disk-utility", "sys-apps/baobab", "gnome-extra/gnome-shell-extensions", "app-eselect/eselect-gnome-shell-extensions"]
+
+# Applications
+apps = ["ghostty", "vcs-git", "fastfetch", "sys-apps/flatpak", "sys-apps/xdg-desktop-portal", "sys-apps/xdg-desktop-portal-gnome", "sys-apps/xdg-desktop-portal-gtk", "app-eselect/eselect-repository", "app-editors/emacs", "app-emacs/vterm", "app-editors/helix"]
+
+fonts = ["media-fonts/fira-code", "media-fonts/symbols-nerd-font", "media-fonts/hack", "media-fonts/jetbrains-mono"]

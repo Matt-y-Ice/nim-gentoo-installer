@@ -4,7 +4,8 @@
 ## :Email: matty_ice_2011@pm.me
 ## :Copyright: 2025
 
-import std/osproc, std/os, std/strutils, std/terminal, std/tables
+import std/osproc, std/os, std/strutils, std/terminal, std/tables, std/sequtils
+import parsetoml # third party
 
 proc is_sudo() =
   ## Ensures the program is running with root privileges.
@@ -20,22 +21,66 @@ proc is_sudo() =
     discard execShellCmd("sudo " & script)
     quit(0)
 
-proc get_disk(): string =
-  ## Prompts the user to select a disk for partitioning and formatting.
+proc getStrSeq(value: TomlValueRef): seq[string] =
+  ## Converts a TOML array value into a sequence of strings.
   ##
-  ## Displays disk information using `lsblk`, then reads user input
-  ## from stdin. The returned string should represent a valid block device
-  ## (e.g., "/dev/sda").
+  ## This helper procedure is used to extract a list of strings from a
+  ## `TomlValueRef` representing a TOML array (e.g., lists of packages or groups).
   ##
-  ## :Returns: A string containing the user-provided disk path.
-  let disks: string = execProcess("lsblk")
-  stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
-    resetStyle, "Disk Information:\n" & disks)
-  stdout.styledWriteLine(fgDefault, "[", fgGreen, "INPUT REQ", fgDefault, "] ",
-    resetStyle, "Enter disk to partition and format: ")
-  let input: string = readline(stdin)
-  # TODO: Add input validation
-  return input
+  ## :Parameters:
+  ##   - `value`: A `TomlValueRef` representing a TOML array.
+  ##
+  ## :Returns: A `seq[string]` containing all elements from the array as strings.
+
+  for item in value.getElems():
+    result.add(item.getStr())
+
+proc load_config(path: string): tuple[
+  disk, hostname, username, desktop: string,
+  usergroups: seq[string],
+  allPkgs: seq[string]
+] =
+  ## Loads and parses a TOML configuration file for the Gentoo installer.
+  ##
+  ## This procedure reads and parses a TOML config file, extracting values such as
+  ## the target disk, hostname, username, user groups, selected desktop environment,
+  ## and categorized package lists. All selected packages are combined into a single
+  ## sequence for downstream installation.
+  ##
+  ## :Parameters:
+  ##   - `path`: Path to the TOML configuration file (e.g., "gnome.toml").
+  ##
+  ## :Returns: A tuple containing:
+  ##   - `disk`: Target disk device (e.g., "/dev/sda")
+  ##   - `hostname`: Desired system hostname
+  ##   - `username`: Default user to create
+  ##   - `desktop`: Selected desktop environment key (e.g., "gnome")
+  ##   - `usergroups`: List of groups the user should belong to
+  ##   - `allPkgs`: Combined list of system, desktop, apps, and font packages to install
+  let config = parsetoml.parseFile(path)
+
+  result.disk = config["disk"].getStr()
+  result.hostname = config["hostname"].getStr()
+  result.username = config["username"].getStr()
+  result.usergroups = getStrSeq(config["usergroups"])
+  result.desktop = config["desktop"].getStr()
+
+  let 
+    packages = config["packages"]
+    systemPkgs  = getStrSeq(packages["system"])
+    desktopPkgs = getStrSeq(packages[result.desktop])
+    appsPkgs    = getStrSeq(packages["apps"])
+    fonts       = getStrSeq(packages["fonts"])
+
+  stdout.styledWriteLine(fgCyan, "Using profile:")
+  echo "Disk: ", result.disk
+  echo "Hostname: ", result.hostname
+  echo "User: ", result.username, " Groups: ", result.usergroups
+  echo "Desktop: ", result.desktop
+  echo "Packages (", result.allPkgs.len, " total):"
+  echo "  ", result.allPkgs.join(" ")
+
+  result.allPkgs = systemPkgs & desktopPkgs & appsPkgs & fonts
 
 proc part_disk(disk: string) =
   ## Partitions the specified disk using GPT and predefined layout.
@@ -176,13 +221,23 @@ when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Running as root!")
+  
+  let (
+    disk,
+    hostname, 
+    username, 
+    desktop,
+    usergroups,
+    allPkgs
+    ) = load_config("gnome.toml")
 
-  let disk: string = get_disk()
   part_disk(disk)
 
-  let efi: string = disk & "1"
-  let swapP: string = disk & "2"
-  let root: string = disk & "3"
+  let 
+    efi: string = disk & "1"
+    swapP: string = disk & "2"
+    root: string = disk & "3"
+  
   format_disk(efi, swapP, root)
   setup_subvolumes(root, "/mnt/gentoo")
   mount_subvolumes(root, "/mnt/gentoo")
