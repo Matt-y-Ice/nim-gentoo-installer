@@ -22,6 +22,13 @@ proc is_sudo() =
     quit(0)
 
 proc get_disk(): string =
+  ## Prompts the user to select a disk for partitioning and formatting.
+  ##
+  ## Displays disk information using `lsblk`, then reads user input
+  ## from stdin. The returned string should represent a valid block device
+  ## (e.g., "/dev/sda").
+  ##
+  ## :Returns: A string containing the user-provided disk path.
   let disks = execProcess("lsblk")
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Disk Information:\n" & disks)
@@ -31,6 +38,18 @@ proc get_disk(): string =
   return input
 
 proc part_disk(disk: string) =
+  ## Partitions the specified disk using GPT and predefined layout.
+  ##
+  ## First wipes all filesystem signatures on the disk using `wipefs`.
+  ## Then partitions the disk using `sfdisk` with the following layout:
+  ## - 1 GiB EFI partition (type U)
+  ## - 4 GiB swap partition (type S)
+  ## - Remaining space as root partition
+  ##
+  ## If either command fails, the program exits with status code 1.
+  ##
+  ## :Parameters:
+  ##   - `disk`: The full path to the disk device to partition (e.g., "/dev/sda").
   let errWipe = execCmd("wipefs --all " & disk)
   if errWipe != 0:
     stdout.styledWriteLine(fgRed,
