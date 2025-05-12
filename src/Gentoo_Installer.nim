@@ -364,5 +364,5 @@ when isMainModule:
   let makeConfig: string = "../gentoo-files/make.conf"
   prepare_chroot(root, mountPoint, makeConfig)
 
-  let artScript: string = "./"
+  let artScript: string = "./" #TODO: Update path
   gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
