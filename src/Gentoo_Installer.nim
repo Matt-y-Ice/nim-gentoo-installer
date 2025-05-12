@@ -263,6 +263,42 @@ proc install_stage3(mountPt: string) =
   else:
     stdout.styledWriteLine(fgGreen, "Stage3 file succesfully installed!")
 
+proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) = 
+  ## Prepares the Gentoo chroot environment by copying configuration files,
+  ## mounting necessary filesystems, and applying the provided make.conf.
+  ##
+  ## :Parameters:
+  ##   - `disk`: The target disk (e.g., "/dev/sdc") used for setting up chroot variables.
+  ##   - `mountPt`: The root mount point for the new system (e.g., "/mnt/gentoo").
+  ##   - `makeConfig`: Path to the make.conf file to copy into the new system.
+  let commands: seq[string] = @[
+    "echo 'disk=\"" & disk & "\"' > " & mountPt & "/root/chroot_var.sh",
+    "cp --dereference /etc/resolv.conf " & mountPt & "/etc",
+    "mount --types proc /proc " & mountPt & "/proc",
+    "mount --rbind /sys " & mountPt & "/sys",
+    "mount --make-rslave " & mountPt & "/sys",
+    "mount --rbind /dev " & mountPt & "/dev",
+    "mount --make-rslave " & mountPt & "/dev",
+    "mount --bind /run " & mountPt & "/run",
+    "mount --make-slave " & mountPt & "/run",
+  ]
+
+  try:
+    let content = readFile(makeConfig)
+    writeFile(mountPt & "/etc/portage/make.conf", content)
+    stdout.styledWriteLine(fgGreen, "make.conf successfully written.")
+  except OSError:
+    stdout.styledWriteLine(fgRed, "Error: make.conf failed to write!")
+    quit(1)
+
+  for cmd in commands:
+    stdout.styledWriteLine(fgCyan, "Executing: " & cmd)
+    let err = execCmd(cmd)
+    if err != 0:
+      stdout.styledWriteLine(fgRed, "Error: " & cmd & " failed to execute!")
+      quit(1)
+
+  stdout.styledWriteLine(fgGreen, "Successfully prepared for chroot.")
 
 when isMainModule:
   is_sudo()
@@ -290,8 +326,12 @@ when isMainModule:
   setup_subvolumes(root, mountPoint)
   mount_subvolumes(root, mountPoint)
   enable_swap(swapP)
-
+  
+  #TODO: add address to TOML and parser
   let stage3Addy: string = "https://distfiles.gentoo.org/releases/amd64/autobuilds/20250511T165428Z/stage3-amd64-desktop-systemd-20250511T165428Z.tar.xz"
 
   dl_stage3(stage3Addy, mountPoint)
   install_stage3(mountPoint)
+
+  let makeConfig: string = "../gentoo-files/make.conf"
+  prepare_chroot(root, mountPoint, makeConfig)
