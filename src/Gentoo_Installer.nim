@@ -3,9 +3,8 @@
 ## :Author: MattyIce
 ## :Email: matty_ice_2011@pm.me
 ## :Copyright: 2025
-## 
 
-import std/osproc, std/os, std/strutils, std/terminal
+import std/osproc, std/os, std/strutils, std/terminal, std/tables
 
 proc is_sudo() =
   ## Ensures the program is running with root privileges.
@@ -32,9 +31,10 @@ proc get_disk(): string =
   let disks: string = execProcess("lsblk")
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Disk Information:\n" & disks)
-  stdout.styledWriteLine(fgDefault, "[", fgGreen, "INPUT", fgDefault, "] ",
+  stdout.styledWriteLine(fgDefault, "[", fgGreen, "INPUT REQ", fgDefault, "] ",
     resetStyle, "Enter disk to partition and format: ")
   let input: string = readline(stdin)
+  # TODO: Add input validation
   return input
 
 proc part_disk(disk: string) =
@@ -65,9 +65,125 @@ proc part_disk(disk: string) =
     else:
       stdout.styledWriteLine(fgGreen, "Disk partitioned successfully.")
 
+proc format_disk(part1: string, part2: string, part3: string) =
+  ## Formats the specified partitions for EFI, swap, and root.
+  ##
+  ## - `part1`: EFI partition (formatted as FAT32)
+  ## - `part2`: Swap partition (formatted with `mkswap`)
+  ## - `part3`: Root partition (formatted as Btrfs)
+  ##
+  ## If any formatting command fails, the program prints an error
+  ## message and exits with code 1.
+  let errFat = execCmd("mkfs.fat -F32 " & part1)
+  if errFat != 0:
+    stdout.styledWriteLine(fgRed, "Error: Failed to format EFI Partition!")
+    quit(1)
+  let errSwap = execCmd("mkswap " & part2)
+  if errSwap != 0:
+    stdout.styledWriteLine(fgRed, "Error: Failed to format Swap Partition!")
+    quit(1)
+  let errBtrfs = execCmd("mkfs.btrfs -f " & part3)
+  if errBtrfs != 0:
+    stdout.styledWriteLine(fgRed, "Error: Failed to format BTRFS Partition!")
+    quit(1)
+
+proc setup_subvolumes(rPart: string, mountPt: string) =
+  ## Creates and initializes Btrfs subvolumes on the given root partition.
+  ##
+  ## Mounts the root partition at the specified mount point, then creates
+  ## the following subvolumes:
+  ##   - @
+  ##   - @home
+  ##   - @var
+  ##   - @tmp
+  ##   - @.snapshots
+  ##
+  ## After creation, the root partition is unmounted. If any command fails,
+  ## the program prints an error message and exits with code 1.
+  ##
+  ## :Parameters:
+  ##   - `rPart`: The Btrfs-formatted root partition device (e.g., "/dev/sda3")
+  ##   - `mountPt`: Temporary mount point used for creating subvolumes (e.g., "/mnt/gentoo")
+  if not dirExists(mountPt):
+    createDir(mountPt)
+  let mntErr = execCmd("mount " & rPart & " " & mountPt)
+  if mntErr != 0:
+    stdout.styledWriteLine(fgRed,
+      "Error: Failed to mount Btrfs root partition!")
+    quit(1)
+  for sub in ["@", "@home", "@var", "@tmp", "@.snapshots"]:
+    stdout.styledWriteLine(fgCyan, "Creating subvolume: " & sub)
+    let err = execCmd("btrfs subvolume create " & mountPt & "/" & sub)
+    if err != 0:
+      stdout.styledWriteLine(fgRed, 
+        "Error: Failed to create Btrfs subvolume: " & sub & "!")
+      quit(1)
+  discard execCmd("umount " & rPart)
+  stdout.styledWriteLine(fgGreen, "Created Btrfs subvolumes succesfully.")
+
+proc mount_subvolumes(rPart: string, baseMount: string) =
+  ## Mounts Btrfs subvolumes to their respective mount points.
+  ##
+  ## This includes:
+  ##   - `@`      → `/mnt/gentoo`
+  ##   - `@home`  → `/mnt/gentoo/home`
+  ##   - `@var`   → `/mnt/gentoo/var`
+  ##   - `@tmp`   → `/mnt/gentoo/tmp`
+  ##   - `@.snapshots` → `/mnt/gentoo/.snapshots`
+  ##
+  ## All mounts use recommended Btrfs options: noatime, compress=zstd.
+  ##
+  ## :Parameters:
+  ##   - `rPart`: The device path of the Btrfs partition (e.g., "/dev/sda3")
+  ##   - `baseMount`: Root of where Gentoo is being installed (e.g., "/mnt/gentoo")
+  let subvols: Table[string, string] = {
+    "@": "",
+    "@home": "/home",
+    "@var": "/var",
+    "@tmp": "/tmp",
+    "@.snapshots": "/.snapshots"
+  }.toTable()
+
+  for sub, path in subvols:
+    let fullMount = baseMount & path
+    if not dirExists(fullMount):
+      createDir(fullMount)
+
+    let opts = "-o noatime,compress=zstd,subvol=" & sub
+    let err = execCmd("mount " & opts & " " & rPart & " " & fullMount)
+    if err != 0:
+      stdout.styledWriteLine(fgRed, "Error: Failed to mount subvolume " & sub)
+      quit(1)
+    else:
+      stdout.styledWriteLine(fgGreen, "Mounted subvolume " & sub & " to " & fullMount)
+
+proc enable_swap(swapP: string) =
+  ## Activates the swap partition using the `swapon` command.
+  ##
+  ## This function enables the specified swap partition so that the
+  ## system can use it for virtual memory. If the command fails, an
+  ## error message is printed, but the program does not exit.
+  ##
+  ## :Parameters:
+  ##   - `swapP`: The device path of the swap partition (e.g., "/dev/sda2")
+  let errSwap = execCmd("swapon " & swapP)
+  if errSwap != 0:
+    stdout.styledWriteLine(fgRed, "Error: Failed to activate swap partition!")
+  else:
+    stdout.styledWriteLine(fgGreen, "Activated swap partition successfully!")
+
 when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Running as root!")
+
   let disk: string = get_disk()
   part_disk(disk)
+
+  let efi: string = disk & "1"
+  let swapP: string = disk & "2"
+  let root: string = disk & "3"
+  format_disk(efi, swapP, root)
+  setup_subvolumes(root, "/mnt/gentoo")
+  mount_subvolumes(root, "/mnt/gentoo")
+  enable_swap(swapP)
