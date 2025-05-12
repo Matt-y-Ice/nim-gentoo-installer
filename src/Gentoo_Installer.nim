@@ -237,6 +237,32 @@ proc dl_stage3(address: string, mountPt: string) =
     client.close()
     stdout.styledWriteLine(fgGreen, "Download complete!")
 
+proc install_stage3(mountPt: string) = 
+  ## Extracts and installs the Gentoo Stage3 tarball to the specified mount point.
+  ##
+  ## This procedure runs the `tar` command with options tailored for Gentoo's
+  ## Stage3 archives. It ensures extended attributes are preserved and numeric
+  ## user IDs are used for proper system setup.
+  ##
+  ## :Parameters:
+  ##   - `mountPt`: The root directory where the Stage3 tarball should be extracted,
+  ##                typically something like "/mnt/gentoo".
+  ##
+  ## The procedure prints progress messages and exits with code 1 if extraction fails.
+  let tarCmd: string = "tar xpvf /mnt/gentoo/stage3.tar.xz --xattrs-include='*.*' --numeric-owner -C /mnt/gentoo"
+  if not fileExists(mountPt & "/stage3.tar.xz"):
+    stdout.styledWriteLine(fgRed, "Error: Stage3 tarball not found.")
+    quit(1)
+  stdout.styledWriteLine(
+    fgCyan, "Extracting and installing stage3 tarball..."
+    )
+  let err = execCmd(tarCmd)
+  if err != 0:
+    stdout.styledWriteLine(fgRed, "Error: Failed to extract stg3 tarball!")
+    quit(1)
+  else:
+    stdout.styledWriteLine(fgGreen, "Stage3 file succesfully installed!")
+
 
 when isMainModule:
   is_sudo()
@@ -268,3 +294,4 @@ when isMainModule:
   let stage3Addy: string = "https://distfiles.gentoo.org/releases/amd64/autobuilds/20250511T165428Z/stage3-amd64-desktop-systemd-20250511T165428Z.tar.xz"
 
   dl_stage3(stage3Addy, mountPoint)
+  install_stage3(mountPoint)
