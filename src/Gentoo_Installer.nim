@@ -12,7 +12,7 @@ proc is_sudo() =
   ## Restarts the script with `sudo` if not already root.
   ## Exits the program after restarting if not run as root.
   eraseScreen()
-  let uid = strip(execProcess("id -u"))
+  let uid: string = strip(execProcess("id -u"))
   if uid != "0":
     stdout.styledWriteLine(fgRed,
       "You must have root privileges to continue; " & 
@@ -29,12 +29,12 @@ proc get_disk(): string =
   ## (e.g., "/dev/sda").
   ##
   ## :Returns: A string containing the user-provided disk path.
-  let disks = execProcess("lsblk")
+  let disks: string = execProcess("lsblk")
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Disk Information:\n" & disks)
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INPUT", fgDefault, "] ",
     resetStyle, "Enter disk to partition and format: ")
-  let input = readline(stdin)
+  let input: string = readline(stdin)
   return input
 
 proc part_disk(disk: string) =
@@ -50,15 +50,15 @@ proc part_disk(disk: string) =
   ##
   ## :Parameters:
   ##   - `disk`: The full path to the disk device to partition (e.g., "/dev/sda").
-  let errWipe = execCmd("wipefs --all " & disk)
+  let errWipe: int = execCmd("wipefs --all " & disk)
   if errWipe != 0:
     stdout.styledWriteLine(fgRed,
       "Error: Program failed to wipe disk!")
     quit(1)
   else:
-    let partCmd = "echo -e 'size=1G, type=U\nsize=4G, type=S\nsize=+' | " &
+    let partCmd: string = "echo -e 'size=1G, type=U\nsize=4G, type=S\nsize=+' | " &
       "sfdisk --label=gpt " & disk 
-    let errPart = execShellCmd(partCmd)
+    let errPart: int = execShellCmd(partCmd)
     if errPart != 0:
       stdout.styledWriteLine(fgRed,"Error: Partitioning failed!")
       quit(1)
@@ -69,5 +69,5 @@ when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Running as root!")
-  let disk = get_disk()
+  let disk: string = get_disk()
   part_disk(disk)

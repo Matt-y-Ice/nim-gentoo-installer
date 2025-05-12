@@ -1,2 +1,17 @@
+# Compiled binaries
+src/Gentoo_Installer
+src/*
+!src/*.nim
+
+# Build artifacts
 nimcache/
+*.o
+*.obj
+*.exe
+*.out
+*.log
+
+# Optional: editor temp files
 *.swp
+*.swo
+*~
