@@ -4,7 +4,7 @@
 ## :Email: matty_ice_2011@pm.me
 ## :Copyright: 2025
 
-import std/osproc, std/os, std/strutils, std/terminal, std/tables, std/sequtils
+import std/osproc, std/os, std/strutils, std/terminal, std/tables, std/httpclient
 import parsetoml # third party
 
 proc is_sudo() =
@@ -217,6 +217,27 @@ proc enable_swap(swapP: string) =
   else:
     stdout.styledWriteLine(fgGreen, "Activated swap partition successfully!")
 
+proc dl_stage3(address: string, mountPt: string) =
+  ## Downloads the Gentoo stage3 tarball to the specified mount point.
+  ##
+  ## :Parameters:
+  ##   - `address`: The full HTTPS URL to the stage3 tarball.
+  ##   - `mountPt`: The target mount point (e.g., "/mnt/gentoo") where
+  ##                the tarball should be saved as "stage3.tar.xz".
+  ##
+  ## This procedure uses Nim's built-in HTTP client to download the file directly
+  ## to disk. It handles cleanup by closing the client in a `finally` block.
+  var client = newHttpClient()
+  stdout.styledWriteLine(
+    fgCyan, "Downloading stage3 tarball from " & address & "..."
+    )
+  try:
+    client.downloadFile(address, mountPt & "/stage3.tar.xz")
+  finally:
+    client.close()
+    stdout.styledWriteLine(fgGreen, "Download complete!")
+
+
 when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
@@ -237,8 +258,13 @@ when isMainModule:
     efi: string = disk & "1"
     swapP: string = disk & "2"
     root: string = disk & "3"
+    mountPoint: string = "/mnt/gentoo"
   
   format_disk(efi, swapP, root)
-  setup_subvolumes(root, "/mnt/gentoo")
-  mount_subvolumes(root, "/mnt/gentoo")
+  setup_subvolumes(root, mountPoint)
+  mount_subvolumes(root, mountPoint)
   enable_swap(swapP)
+
+  let stage3Addy: string = "https://distfiles.gentoo.org/releases/amd64/autobuilds/20250511T165428Z/stage3-amd64-desktop-systemd-20250511T165428Z.tar.xz"
+
+  dl_stage3(stage3Addy, mountPoint)

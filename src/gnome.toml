@@ -17,7 +17,7 @@ system = ["sys-kernel/installkernel", "sys-kernel/gentoo-kernel", "sys-kernel/ge
 audio = ["media-video/pipewire", "media-video/wireplumber", "media-libs/libcanberra"]
 
 # System tools and utilities
-sys_tools = ["sys-apps/mlocate", "app-shells/bash-completion", "net-misc/chrony", "sys-fs/btrfs-progs", "sys-fs/dosfstools", "app-portage/cpuid2cpuflags", "genfstab", "net-misc/dhcpcd", "net-misc/networkmanager", "app-admin/sudo"]
+sys_tools = ["sys-apps/mlocate", "app-shells/bash-completion", "net-misc/chrony", "sys-fs/btrfs-progs", "sys-fs/dosfstools", "app-portage/cpuid2cpuflags", "genfstab", "net-misc/dhcpcd", "net-misc/networkmanager", "app-admin/sudo", "dev-lang/nim"]
 
 # Gnome DE and gnome-specific apps
 gnome = ["gnome-base/gnome", "gnome-tweaks", "gdm", "app-arch/file-roller", "gnome-base/dconf-editor", "gnome-extra/gnome-calculator", "gnome-extra/gnome-system-monitor", "sys-apps/gnome-disk-utility", "sys-apps/baobab", "gnome-extra/gnome-shell-extensions", "app-eselect/eselect-gnome-shell-extensions"]
