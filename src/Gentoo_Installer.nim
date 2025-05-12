@@ -46,7 +46,6 @@ proc part_disk(disk: string) =
     else:
       stdout.styledWriteLine(fgGreen, "Disk partitioned successfully.")
 
-
 when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
