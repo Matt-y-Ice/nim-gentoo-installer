@@ -1,0 +1,4 @@
+www-client/ungoogled-chromium X wayland pulseaudio proprietary-codecs system-openh264 cups qt5 qt6 system-icu system-harfbuzz system-libusb system-png system-zstd clang official screencast gtk4 -system-ffmpeg -system-libvpx -system-woff2 -system-snappy -system-re2
+sys-libs/zlib minizip
+net-libs/nodejs inspector
+media-libs/libvpx postproc

@@ -1,0 +1,2 @@
+app-editors/emacs gtk -X gui inotify dbus gfile jpeg png svg webp json threads harfbuzz tree-sitter jit sound dynamic-loading
+sys-devel/gcc jit
