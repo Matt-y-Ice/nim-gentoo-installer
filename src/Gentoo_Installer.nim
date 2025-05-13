@@ -295,6 +295,11 @@ proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
     "echo 'disk=\"" & disk & "\"' > " & mountPt & "/root/chroot_var.sh",
     "cp ~/.arturo/bin/arturo " & mountPt & "/root/.arturo/bin/arturo",
     "chmod +x " & mountPt & "/root/.arturo/bin/arturo",
+    "cp ../arturo-scripts/gentoo-chroot.art " & mountPt & "/root",
+    "chmod +x " & mountPt & "/root/gentoo-chroot.art",
+    "cp ../arturo-scripts/gentoo-first-boot.art" & mountPt & "/root",
+    "chmod 755 " & mountPt & "/root/gentoo-first-boot.art",
+    "chmod +x " & mountPt & "/root/gentoo-first-boot.art",
     "cp ../gentoo-files/make.conf " & mountPt & "/etc/portage/make.conf",
     "cp ../gentoo-files/emacs " & mountPt & "/etc/portage/package.use/emacs",
     "cp ../gentoo-files/ghostty " & mountPt &
@@ -399,7 +404,19 @@ when isMainModule:
 
   #TODO: add path to TOML and parser
   let makeConfig: string = "../gentoo-files/make.conf"
-  prepare_chroot(root, mountPoint, makeConfig)
+  prepare_chroot(efi, mountPoint, makeConfig)
 
   let artScript: string = "../arturo-scripts/gentoo-chroot.art" #TODO: Update path
+  let args: string = hostname & " " & username & " " & desktop & " " &
+    usergroups.join(" ") & " " & allPkgs.join(" ")
+
   gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
+
+gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
+
+stdout.styledWriteLine(fgCyan, "Cleaning up chroot environment...")
+
+discard execCmd("swapoff " & swapP)
+discard execCmd("umount -Rl " & mountPoint)
+
+stdout.styledWriteLine(fgGreen, "Gentoo install completed and unmounted successfully.")

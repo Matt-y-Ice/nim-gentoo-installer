@@ -1,0 +1,108 @@
+; Gentoo Chroot Setup Script
+;
+; This Arturo script is executed from within the Gentoo chroot environment as part of an
+; automated install process. It performs final system configuration, including:
+;   - Updating the Portage tree and setting the system profile
+;   - Installing and configuring the kernel, systemd, bootloader, and networking
+;   - Applying custom USE flags and locale settings
+;   - Installing core packages and enabling systemd services
+;
+; It also registers a systemd service to run the `gentoo-firstboot.art` script once,
+; immediately after the first reboot.
+;
+; Arguments:
+;   0: Hostname to assign
+;   1: Username to create
+;   2: Desktop environment key (e.g., "gnome")
+;   3..5: User group memberships (e.g., "wheel", "audio", "video")
+;   6..n: List of additional packages to install
+;
+; Example:
+;   arturo gentoo-chroot.art "gentoo-desktop" "mattyice" "gnome" "wheel" "audio" "video" ...
+
+hostname: arguments\0
+username: arguments\1
+desktop: arguments\2
+
+usergroups: slice arguments 3 5      ; gets arguments[3..5]
+packages: slice arguments 6          ; gets arguments[6..end]
+
+commands: [
+	"emerge-webrsync"
+	"eselect profile set 26"
+	"emerge --oneshot app-portage/cpuid2cpuflags"
+	"echo \\\"*/* $(cpuid2cpuflags)\\\" > /etc/portage/package.use/00cpu-flags"
+	"echo \\\"*/* VIDEO_CARDS: nvidia\\\" > /etc/portage/package.use/00video_cards" ; change for your video card
+	"ln -sf ../usr/share/zoneinfo/US/Eastern /etc/localtime"
+	"locale-gen"
+	"eselect locale set 5"
+	"env-update && source /etc/profile"
+	"mkdir /efi"
+	"source /root/chroot_vars.sh && mount $disk /efi"
+	"echo -e \\\"sys-apps/systemd boot\\\\nsys-kernel/installkernel systemd-boot\\\" > /etc/portage/package.use/systemd"
+	"echo \\\"sys-kernel/installkernel dracut\\\" > /etc/portage/package.use/installkernel"
+	"emerge sys-apps/systemd sys-kernel/installkernel"
+	"echo \\\"quiet splash\\\" > /etc/kernel/cmdline"
+	"emerge sys-kernel/gentoo-kernel"
+	"emerge sys-kernel/gentoo-sources"
+	"emerge genfstab"
+	"genfstab / >> /etc/fstab"
+	"systemctl daemon-reexec"
+	"systemctl daemon-reload"
+	"echo \\\"gentoo-desktop\\\" > /etc/hostname"
+	"emerge net-misc/dhcpcd net-misc/networkmanager"
+	"systemctl enable dhcpcd"
+	"systemctl enable NetworkManager"
+	"passwd" ; will need to enter password for root
+	"systemd-machine-id-setup"
+	"systemd-firstboot --prompt"
+	"emerge sys-apps/mlocate"
+	"emerge app-shells/bash-completion"
+	"emerge net-misc/chrony"
+	"emerge sys-fs/btrfs-progs"
+	"emerge sys-fs/dosfstools"
+	"emerge app-admin/sudo"
+	"emerge dev-lang/nim"
+	"emerge app-eselect/eselect-repository"
+	"eselect repository enable gentoo-zh"
+	"systemctl enable chronyd.service"
+	"echo -e \\\"sys-apps/systemd boot\\\" > /etc/portage/package.use/systemd-boot"
+	"emerge sys-apps/systemd"
+	"bootctl --esp-path=/efi install"
+	"ROOT_DISK=\\\"\\${disk%?}3\\\""
+    "ROOT_UUID=\\$(blkid -s UUID -o value \\\"\\$ROOT_DISK\\\")"
+    "BOOT_ENTRY_FILE=\\$(find /efi/loader/entries/ -name 'gentoo-*.conf' | sort | tail -n 1)"
+    "sed -i \\\"s|^options.*|options root=UUID=\\$ROOT_UUID quiet splash|\\\" \\\"\\$BOOT_ENTRY_FILE\\\""
+    "emerge sys-kernel/linux-firmware"
+    "emerge --update --deep --changed-use @world"
+    "emerge --depclean"
+    "emaint sync"
+    "systemctl enable gentoo-firstboot.service"
+    "rm /stage3.tar.*"
+    "useradd -m -G " ++ join usergroups "," ++ " -s /bin/bash " ++ username
+    "passwd " ++ username ; will prompt for password
+    "systemctl enable gdm"
+]
+
+loop commands 'cmd [
+	print ["[INFO]" "Executing:" cmd]
+	result: execute.code.directly cmd
+	if result <> 0 [
+		print ["[ERROR]" cmd "failed with exit code:" result]
+		break
+	] 
+]
+
+print "[INFO] All initial system configuration commands executed successfully."
+
+print ["[INFO] Installing packages:" packages]
+
+loop packages 'pkg [
+    result: execute.code.directly "emerge " ++ pkg
+    if result <> 0 [
+        print ["[ERROR]" pkg "failed to install."]
+        break
+    ]
+]
+
+Print "[INFO] All packages have been installed. Please reboot and adjust UEFI boot order if you have multiple UEFI entries"

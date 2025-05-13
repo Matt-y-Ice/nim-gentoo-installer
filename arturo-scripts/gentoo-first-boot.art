@@ -1,0 +1,35 @@
+; Gentoo First Boot Configuration Script
+;
+; This Arturo script is intended to be executed by the newly created user
+; immediately after the first boot into a freshly installed Gentoo system.
+; It performs essential user-level configurations, such as:
+;
+; - Adding the Flathub remote for Flatpak
+; - Enabling and starting PipeWire and WirePlumber user services
+; - Setting up Git global username and email
+;
+; Each command is executed directly via the shell, and failures are reported.
+; This script assumes it is being run by a non-root user with systemd --user support enabled.
+;
+; Author: MattyIce
+; Email : matty_ice_2011@pm.me
+; Year  : 2025
+
+commands: [
+    "flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo"
+    "systemctl --user enable --now pipewire.socket pipewire-pulse.socket"
+    "systemctl --user enable --now wireplumber.service"
+    "git config --global user.email \\\"matty_ice_2011@pm.me\\\""
+    "git config --global user.name \\\"mattyice\\\""
+]
+
+loop commands 'cmd [
+	print ["[INFO]" "Executing:" cmd]
+	result: execute.code.directly cmd
+	if result <> 0 [
+		print ["[ERROR]" cmd "failed with exit code:" result]
+		break
+	] 
+]
+
+print "[INFO] All commands executed successfully."
