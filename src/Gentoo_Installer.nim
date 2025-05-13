@@ -1,5 +1,22 @@
-## This program automates installation of Gentoo Linux.
-## 
+## Gentoo Installer Automation Tool
+##
+## This program automates the initial installation and configuration of Gentoo Linux.
+## It is designed to be run from a live environment and performs the following steps:
+##
+## - Parses a TOML configuration file defining the target disk, hostname, user, and package sets.
+## - Partitions and formats the target disk with EFI, swap, and Btrfs.
+## - Creates and mounts Btrfs subvolumes for modular layout.
+## - Downloads and extracts the Stage3 tarball into the target root.
+## - Copies configuration files such as `make.conf`, USE flag overrides, and host settings.
+## - Mounts necessary filesystems and prepares the chroot environment.
+## - Transfers control to a post-install Arturo script executed within the chroot environment.
+##
+## The post-chroot configuration phase (e.g., setting the hostname, installing packages,
+## bootloader, services, etc.) is handled by the `gentoo-chroot.art` script in Arturo.
+##
+## This program is intended for developers, power users, and Gentoo enthusiasts
+## who want a customizable, reproducible, and scriptable install process.
+##
 ## :Author: MattyIce
 ## :Email: matty_ice_2011@pm.me
 ## :Copyright: 2025
@@ -15,7 +32,7 @@ proc is_sudo() =
   let uid: string = strip(execProcess("id -u"))
   if uid != "0":
     stdout.styledWriteLine(fgRed,
-      "You must have root privileges to continue; " & 
+      "You must have root privileges to continue; " &
       "Restarting as root!")
     let script = getAppFilename()
     discard execShellCmd("sudo " & script)
@@ -65,12 +82,12 @@ proc load_config(path: string): tuple[
   result.usergroups = getStrSeq(config["usergroups"])
   result.desktop = config["desktop"].getStr()
 
-  let 
+  let
     packages = config["packages"]
-    systemPkgs  = getStrSeq(packages["system"])
+    systemPkgs = getStrSeq(packages["system"])
     desktopPkgs = getStrSeq(packages[result.desktop])
-    appsPkgs    = getStrSeq(packages["apps"])
-    fonts       = getStrSeq(packages["fonts"])
+    appsPkgs = getStrSeq(packages["apps"])
+    fonts = getStrSeq(packages["fonts"])
 
   stdout.styledWriteLine(fgCyan, "Using profile:")
   echo "Disk: ", result.disk
@@ -102,10 +119,10 @@ proc part_disk(disk: string) =
     quit(1)
   else:
     let partCmd: string = "echo -e 'size=1G, type=U\nsize=4G, type=S\nsize=+' | " &
-      "sfdisk --label=gpt " & disk 
+      "sfdisk --label=gpt " & disk
     let errPart: int = execShellCmd(partCmd)
     if errPart != 0:
-      stdout.styledWriteLine(fgRed,"Error: Partitioning failed!")
+      stdout.styledWriteLine(fgRed, "Error: Partitioning failed!")
       quit(1)
     else:
       stdout.styledWriteLine(fgGreen, "Disk partitioned successfully.")
@@ -160,7 +177,7 @@ proc setup_subvolumes(rPart: string, mountPt: string) =
     stdout.styledWriteLine(fgCyan, "Creating subvolume: " & sub)
     let err = execCmd("btrfs subvolume create " & mountPt & "/" & sub)
     if err != 0:
-      stdout.styledWriteLine(fgRed, 
+      stdout.styledWriteLine(fgRed,
         "Error: Failed to create Btrfs subvolume: " & sub & "!")
       quit(1)
   discard execCmd("umount " & rPart)
@@ -237,7 +254,7 @@ proc dl_stage3(address: string, mountPt: string) =
     client.close()
     stdout.styledWriteLine(fgGreen, "Download complete!")
 
-proc install_stage3(mountPt: string) = 
+proc install_stage3(mountPt: string) =
   ## Extracts and installs the Gentoo Stage3 tarball to the specified mount point.
   ##
   ## This procedure runs the `tar` command with options tailored for Gentoo's
@@ -263,7 +280,7 @@ proc install_stage3(mountPt: string) =
   else:
     stdout.styledWriteLine(fgGreen, "Stage3 file succesfully installed!")
 
-proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) = 
+proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
   ## Prepares the Gentoo chroot environment by copying configuration files,
   ## mounting necessary filesystems, and applying the provided make.conf.
   ##
@@ -271,8 +288,34 @@ proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
   ##   - `disk`: The target disk (e.g., "/dev/sdc") used for setting up chroot variables.
   ##   - `mountPt`: The root mount point for the new system (e.g., "/mnt/gentoo").
   ##   - `makeConfig`: Path to the make.conf file to copy into the new system.
+  discard execCmd("mkdir -p " & mountPt & "/etc/portage/package.use")
+  discard execCmd("mkdir -p " & mountPt & "/root/.arturo/bin")
+
   let commands: seq[string] = @[
     "echo 'disk=\"" & disk & "\"' > " & mountPt & "/root/chroot_var.sh",
+    "cp ~/.arturo/bin/arturo " & mountPt & "/root/.arturo/bin/arturo",
+    "chmod +x " & mountPt & "/root/.arturo/bin/arturo",
+    "cp ../gentoo-files/make.conf " & mountPt & "/etc/portage/make.conf",
+    "cp ../gentoo-files/emacs " & mountPt & "/etc/portage/package.use/emacs",
+    "cp ../gentoo-files/ghostty " & mountPt &
+    "/etc/portage/package.use/ghostty",
+    "cp ../gentoo-files/git " & mountPt & "/etc/portage/package.use/git",
+    "cp ../gentoo-files/gnome " & mountPt & "/etc/portage/package.use/gnome",
+    "cp ../gentoo-files/installkernel " & mountPt &
+    "/etc/portage/package.use/installkernel",
+    "cp ../gentoo-files/libcanberra " & mountPt &
+    "/etc/portage/package.use/libcanberra",
+    "/etc/portage/package.use/pipewire",
+    "cp ../gentoo-files/systemd " & mountPt &
+    "/etc/portage/package.use/systemd",
+    "cp ../gentoo-files/systemd-boot " & mountPt &
+    "/etc/portage/package.use/systemd-boot",
+    "cp ../gentoo-files/ungoogled-chromium " & mountPt &
+    "/etc/portage/package.use/ungoogled-chromium",
+    "cp ../gentoo-files/wireplumber " & mountPt &
+    "/etc/portage/package.use/wireplumber",
+    "cp ../gentoo-files/locale.gen " & mountPt & "/etc/locale.gen",
+    "cp ../gentoo-files/hosts " & mountPt & "/etc/hosts",
     "cp --dereference /etc/resolv.conf " & mountPt & "/etc",
     "mount --types proc /proc " & mountPt & "/proc",
     "mount --rbind /sys " & mountPt & "/sys",
@@ -282,14 +325,6 @@ proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
     "mount --bind /run " & mountPt & "/run",
     "mount --make-slave " & mountPt & "/run",
   ]
-
-  try:
-    let content = readFile(makeConfig)
-    writeFile(mountPt & "/etc/portage/make.conf", content)
-    stdout.styledWriteLine(fgGreen, "make.conf successfully written.")
-  except OSError:
-    stdout.styledWriteLine(fgRed, "Error: make.conf failed to write!")
-    quit(1)
 
   for cmd in commands:
     stdout.styledWriteLine(fgCyan, "Executing: " & cmd)
@@ -301,12 +336,12 @@ proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
   stdout.styledWriteLine(fgGreen, "Successfully prepared for chroot.")
 
 proc gentoo_chroot(
-  hostname: string, 
+  hostname: string,
   username: string,
   desktop: string,
   usergroups: seq[string],
-  allPkgs: seq[string], 
-  artScript:string,
+  allPkgs: seq[string],
+  artScript: string,
   mountPt: string
   ) =
   ## Executes a chroot and runs the Arturo post-setup script with passed arguments.
@@ -319,8 +354,10 @@ proc gentoo_chroot(
   ##   - `allPkgs`: List of packages to install in chroot
   ##   - `artScript`: Path to the Arturo script inside the chroot (e.g., /root/gentoo-chroot.art)
   ##   - `mountPt`: Root mount point for the chroot (e.g., /mnt/gentoo)
-  let args: string = hostname & " " & username & " " & desktop & " " & usergroups.join(" ") & " " & allPkgs.join(" ")
-  let fullCmd: string = "chroot " & mountPt & " /bin/bash -c '" & artScript & " " & args & "'"
+  let args: string = hostname & " " & username & " " & desktop & " " &
+      usergroups.join(" ") & " " & allPkgs.join(" ")
+  let fullCmd: string = "chroot " & mountPt & " /bin/bash -c '" & artScript &
+      " " & args & "'"
   stdout.styledWriteLine(fgCyan, "Running chroot command: " & fullCmd)
   let err = execCmd(fullCmd)
   if err != 0:
@@ -331,11 +368,11 @@ when isMainModule:
   is_sudo()
   stdout.styledWriteLine(fgDefault, "[", fgGreen, "INFO", fgDefault, "] ",
     resetStyle, "Running as root!")
-  
+
   let (
     disk,
-    hostname, 
-    username, 
+    hostname,
+    username,
     desktop,
     usergroups,
     allPkgs
@@ -343,17 +380,17 @@ when isMainModule:
 
   part_disk(disk)
 
-  let 
+  let
     efi: string = disk & "1"
     swapP: string = disk & "2"
     root: string = disk & "3"
     mountPoint: string = "/mnt/gentoo"
-  
+
   format_disk(efi, swapP, root)
   setup_subvolumes(root, mountPoint)
   mount_subvolumes(root, mountPoint)
   enable_swap(swapP)
-  
+
   #TODO: add address to TOML and parser
   let stage3Addy: string = "https://distfiles.gentoo.org/releases/amd64/autobuilds/20250511T165428Z/stage3-amd64-desktop-systemd-20250511T165428Z.tar.xz"
 
@@ -364,5 +401,5 @@ when isMainModule:
   let makeConfig: string = "../gentoo-files/make.conf"
   prepare_chroot(root, mountPoint, makeConfig)
 
-  let artScript: string = "./" #TODO: Update path
+  let artScript: string = "../arturo-scripts/gentoo-chroot.art" #TODO: Update path
   gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
