@@ -12,7 +12,7 @@
 ## - Transfers control to a post-install Arturo script executed within the chroot environment.
 ##
 ## The post-chroot configuration phase (e.g., setting the hostname, installing packages,
-## bootloader, services, etc.) is handled by the `gentoo-chroot.art` script in Arturo.
+## bootloader, services, etc.) is handled by the `gentoo-chroot.sh` script in Arturo.
 ##
 ## This program is intended for developers, power users, and Gentoo enthusiasts
 ## who want a customizable, reproducible, and scriptable install process.
@@ -84,7 +84,6 @@ proc load_config(path: string): tuple[
 
   let
     packages = config["packages"]
-    systemPkgs = getStrSeq(packages["system"])
     desktopPkgs = getStrSeq(packages[result.desktop])
     appsPkgs = getStrSeq(packages["apps"])
     fonts = getStrSeq(packages["fonts"])
@@ -97,7 +96,7 @@ proc load_config(path: string): tuple[
   echo "Packages (", result.allPkgs.len, " total):"
   echo "  ", result.allPkgs.join(" ")
 
-  result.allPkgs = systemPkgs & desktopPkgs & appsPkgs & fonts
+  result.allPkgs = desktopPkgs & appsPkgs & fonts
 
 proc part_disk(disk: string) =
   ## Partitions the specified disk using GPT and predefined layout.
@@ -289,38 +288,38 @@ proc prepare_chroot(disk: string, mountPt: string, makeConfig: string) =
   ##   - `mountPt`: The root mount point for the new system (e.g., "/mnt/gentoo").
   ##   - `makeConfig`: Path to the make.conf file to copy into the new system.
   discard execCmd("mkdir -p " & mountPt & "/etc/portage/package.use")
-  discard execCmd("mkdir -p " & mountPt & "/root/.arturo/bin")
+  discard execCmd("mkdir -p " & mountPt & "/root/scripts")
 
   let commands: seq[string] = @[
     "echo 'disk=\"" & disk & "\"' > " & mountPt & "/root/chroot_var.sh",
-    "cp ~/.arturo/bin/arturo " & mountPt & "/root/.arturo/bin/arturo",
-    "chmod +x " & mountPt & "/root/.arturo/bin/arturo",
-    "cp ../arturo-scripts/gentoo-chroot.art " & mountPt & "/root",
-    "chmod +x " & mountPt & "/root/gentoo-chroot.art",
-    "cp ../arturo-scripts/gentoo-first-boot.art" & mountPt & "/root",
-    "chmod 755 " & mountPt & "/root/gentoo-first-boot.art",
-    "chmod +x " & mountPt & "/root/gentoo-first-boot.art",
-    "cp ../gentoo-files/make.conf " & mountPt & "/etc/portage/make.conf",
-    "cp ../gentoo-files/emacs " & mountPt & "/etc/portage/package.use/emacs",
-    "cp ../gentoo-files/ghostty " & mountPt &
+    "cp ./bash-scripts/gentoo-chroot.sh " & mountPt & "/root/gentoo-chroot.sh",
+    "chmod +x " & mountPt & "/root/gentoo-chroot.sh",
+    "cp ./bash-scripts/gentoo-first-boot.sh " & mountPt &
+    "/root/gentoo-first-boot.sh",
+    "chmod 755 " & mountPt & "/root/gentoo-first-boot.sh",
+    "chmod +x " & mountPt & "/root/gentoo-first-boot.sh",
+    "cp ./gentoo-files/make.conf " & mountPt & "/etc/portage/make.conf",
+    "cp ./gentoo-files/emacs " & mountPt & "/etc/portage/package.use/emacs",
+    "cp ./gentoo-files/ghostty " & mountPt &
     "/etc/portage/package.use/ghostty",
-    "cp ../gentoo-files/git " & mountPt & "/etc/portage/package.use/git",
-    "cp ../gentoo-files/gnome " & mountPt & "/etc/portage/package.use/gnome",
-    "cp ../gentoo-files/installkernel " & mountPt &
+    "cp ./gentoo-files/git " & mountPt & "/etc/portage/package.use/git",
+    "cp ./gentoo-files/gnome " & mountPt & "/etc/portage/package.use/gnome",
+    "cp ./gentoo-files/installkernel " & mountPt &
     "/etc/portage/package.use/installkernel",
-    "cp ../gentoo-files/libcanberra " & mountPt &
+    "cp ./gentoo-files/libcanberra " & mountPt &
     "/etc/portage/package.use/libcanberra",
+    "cp ./gentoo-files/pipewire " & mountPt &
     "/etc/portage/package.use/pipewire",
-    "cp ../gentoo-files/systemd " & mountPt &
+    "cp ./gentoo-files/systemd " & mountPt &
     "/etc/portage/package.use/systemd",
-    "cp ../gentoo-files/systemd-boot " & mountPt &
+    "cp ./gentoo-files/systemd-boot " & mountPt &
     "/etc/portage/package.use/systemd-boot",
-    "cp ../gentoo-files/ungoogled-chromium " & mountPt &
+    "cp ./gentoo-files/ungoogled-chromium " & mountPt &
     "/etc/portage/package.use/ungoogled-chromium",
-    "cp ../gentoo-files/wireplumber " & mountPt &
+    "cp ./gentoo-files/wireplumber " & mountPt &
     "/etc/portage/package.use/wireplumber",
-    "cp ../gentoo-files/locale.gen " & mountPt & "/etc/locale.gen",
-    "cp ../gentoo-files/hosts " & mountPt & "/etc/hosts",
+    "cp ./gentoo-files/locale.gen " & mountPt & "/etc/locale.gen",
+    "cp ./gentoo-files/hosts " & mountPt & "/etc/hosts",
     "cp --dereference /etc/resolv.conf " & mountPt & "/etc",
     "mount --types proc /proc " & mountPt & "/proc",
     "mount --rbind /sys " & mountPt & "/sys",
@@ -346,7 +345,7 @@ proc gentoo_chroot(
   desktop: string,
   usergroups: seq[string],
   allPkgs: seq[string],
-  artScript: string,
+  Script: string,
   mountPt: string
   ) =
   ## Executes a chroot and runs the Arturo post-setup script with passed arguments.
@@ -357,12 +356,11 @@ proc gentoo_chroot(
   ##   - `desktop`: Desktop environment key (e.g., "gnome")
   ##   - `usergroups`: Additional groups for the user (wheel, audio, etc.)
   ##   - `allPkgs`: List of packages to install in chroot
-  ##   - `artScript`: Path to the Arturo script inside the chroot (e.g., /root/gentoo-chroot.art)
+  ##   - `artScript`: Path to the Arturo script inside the chroot (e.g., /root/gentoo-chroot.sh)
   ##   - `mountPt`: Root mount point for the chroot (e.g., /mnt/gentoo)
   let args: string = hostname & " " & username & " " & desktop & " " &
       usergroups.join(" ") & " " & allPkgs.join(" ")
-  let fullCmd: string = "chroot " & mountPt & " /bin/bash -c '" & artScript &
-      " " & args & "'"
+  let fullCmd = "chroot " & mountPt & " /bin/bash -c '" & Script & " " & args & "'"
   stdout.styledWriteLine(fgCyan, "Running chroot command: " & fullCmd)
   let err = execCmd(fullCmd)
   if err != 0:
@@ -381,7 +379,7 @@ when isMainModule:
     desktop,
     usergroups,
     allPkgs
-    ) = load_config("gnome.toml")
+    ) = load_config("./configs/gnome.toml")
 
   part_disk(disk)
 
@@ -403,20 +401,18 @@ when isMainModule:
   install_stage3(mountPoint)
 
   #TODO: add path to TOML and parser
-  let makeConfig: string = "../gentoo-files/make.conf"
+  let makeConfig: string = "./gentoo-files/make.conf"
   prepare_chroot(efi, mountPoint, makeConfig)
 
-  let artScript: string = "../arturo-scripts/gentoo-chroot.art" #TODO: Update path
+  let bashScript: string = "/root/gentoo-chroot.sh" #TODO: Update path
   let args: string = hostname & " " & username & " " & desktop & " " &
     usergroups.join(" ") & " " & allPkgs.join(" ")
 
-  gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
+  gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, bashScript, mountPoint)
 
-gentoo_chroot(hostname, username, desktop, usergroups, allPkgs, artScript, mountPoint)
+  stdout.styledWriteLine(fgCyan, "Cleaning up chroot environment...")
 
-stdout.styledWriteLine(fgCyan, "Cleaning up chroot environment...")
+  discard execCmd("swapoff " & swapP)
+  discard execCmd("umount -Rl " & mountPoint)
 
-discard execCmd("swapoff " & swapP)
-discard execCmd("umount -Rl " & mountPoint)
-
-stdout.styledWriteLine(fgGreen, "Gentoo install completed and unmounted successfully.")
+  stdout.styledWriteLine(fgGreen, "Gentoo install completed and unmounted successfully.")
